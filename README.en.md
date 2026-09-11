@@ -1,4 +1,4 @@
-# Goodix Lab
+# TRCK
 
 A Flutter-based BLE workbench for Goodix GUS temperature wristbands. The app covers discovery, connection, service setup, GUS UART commands, live temperature notifications, historical data transfer, and TXT export.
 
@@ -17,8 +17,8 @@ A Flutter-based BLE workbench for Goodix GUS temperature wristbands. The app cov
 
 ## Preview
 
-| Home | Scan results | Device console |
-| :---: | :---: | :---: |
+|                Home                |            Scan results            |             Device console             |
+| :--------------------------------: | :--------------------------------: | :------------------------------------: |
 | ![Home preview](doc/home_page.png) | ![Scan preview](doc/scan_page.png) | ![Device preview](doc/device_info.png) |
 
 ## Requirements and setup
@@ -62,20 +62,20 @@ flutter build linux     # Linux
 ## Typical workflow
 
 1. Enable system Bluetooth and tap **Scan** on the home page.
-2. Select a `Goodix_GUS` device and wait for service discovery and TX notification subscription.
+2. Select a `TRCK` device and wait for service discovery and TX notification subscription.
 3. Use the device console to query versions, battery, charging state, and time.
 4. Start live temperature notifications, then read all or not-yet-uploaded history.
 5. Share or save the history as a TXT file when you need an offline record.
 
 ## GUS BLE protocol
 
-| Item | UUID / value |
-| --- | --- |
-| Service | `A6ED0201-D344-460A-8075-B9E8EC90D71B` |
+| Item                      | UUID / value                           |
+| ------------------------- | -------------------------------------- |
+| Service                   | `A6ED0201-D344-460A-8075-B9E8EC90D71B` |
 | TX (device notifications) | `A6ED0202-D344-460A-8075-B9E8EC90D71B` |
-| RX (application writes) | `A6ED0203-D344-460A-8075-B9E8EC90D71B` |
-| Flow | `A6ED0204-D344-460A-8075-B9E8EC90D71B` |
-| Local data command | `0x36` |
+| RX (application writes)   | `A6ED0203-D344-460A-8075-B9E8EC90D71B` |
+| Flow                      | `A6ED0204-D344-460A-8075-B9E8EC90D71B` |
+| Local data command        | `0x36`                                 |
 
 The base frame format is:
 
@@ -85,15 +85,15 @@ The base frame format is:
 
 Implemented command groups:
 
-| Command | Purpose |
-| --- | --- |
-| `0x11` | Software / hardware version |
-| `0x12` | Battery / charging state |
-| `0x10` | Query or synchronize device time |
-| `0x34` | Start live temperature |
-| `0x36 / 0x04` | Query history capacity |
+| Command               | Purpose                             |
+| --------------------- | ----------------------------------- |
+| `0x11`                | Software / hardware version         |
+| `0x12`                | Battery / charging state            |
+| `0x10`                | Query or synchronize device time    |
+| `0x34`                | Start live temperature              |
+| `0x36 / 0x04`         | Query history capacity              |
 | `0x36 / 0x00`, `0x01` | Read not-yet-uploaded / all history |
-| `0x36 / 0x02` | Stop history upload |
+| `0x36 / 0x02`         | Stop history upload                 |
 
 Frame builders, parsers, and status codes are in [`lib/services/gus_protocol.dart`](lib/services/gus_protocol.dart). BLE scanning, connection handling, and notification processing are in [`lib/controllers/ble_controller.dart`](lib/controllers/ble_controller.dart).
 

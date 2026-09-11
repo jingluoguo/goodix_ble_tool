@@ -18,7 +18,7 @@ class HomePage extends GetView<BleController> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Goodix Lab',
+          'TRCK',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
@@ -132,7 +132,7 @@ class HomePage extends GetView<BleController> {
     return SectionCard(
       title: '附近的 Goodix 设备',
       subtitle: controller.scanning.value
-          ? '正在监听 Goodix_GUS 广播'
+          ? '正在监听 Goodix 广播'
           : '仅显示设备名或服务 UUID 匹配的设备',
       trailing: controller.scanning.value
           ? FilledButton.icon(
@@ -161,7 +161,7 @@ class HomePage extends GetView<BleController> {
                     const SizedBox(height: 10),
                     Text(
                       controller.adapterState.value == BluetoothAdapterState.on
-                          ? '点击扫描，寻找 Goodix_GUS'
+                          ? '点击扫描，寻找 TRCK'
                           : '请先开启系统蓝牙',
                       style: const TextStyle(color: AppTheme.muted),
                     ),

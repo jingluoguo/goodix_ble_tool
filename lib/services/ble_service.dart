@@ -15,7 +15,7 @@ class BleService {
 
   Future<void> startScan() async {
     await FlutterBluePlus.startScan(
-      withNames: const ['Goodix_GUS'],
+      withNames: const ['TRCK'],
       withServices: [Guid(GusProtocol.serviceUuid)],
       timeout: const Duration(seconds: 15),
       webOptionalServices: [Guid(GusProtocol.serviceUuid)],

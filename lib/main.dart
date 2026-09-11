@@ -17,7 +17,7 @@ class GoodixBleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'Goodix Lab',
+      title: 'TRCK',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       initialBinding: BindingsBuilder(() {

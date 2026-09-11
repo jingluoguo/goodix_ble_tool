@@ -51,14 +51,14 @@ class BleController extends GetxController {
       connectionState.value == BluetoothConnectionState.connected;
   bool get busy => pendingLabels.isNotEmpty;
   bool get isGoodix =>
-      selectedDevice.value?.platformName.contains('Goodix_GUS') ?? false;
+      selectedDevice.value?.platformName.contains('TRCK') ?? false;
   BluetoothCharacteristic? get rx =>
       _ble.findCharacteristic(services, GusProtocol.rxUuid);
   BluetoothCharacteristic? get tx =>
       _ble.findCharacteristic(services, GusProtocol.txUuid);
   String get deviceName => selectedDevice.value?.platformName.isNotEmpty == true
       ? selectedDevice.value!.platformName
-      : 'Goodix_GUS';
+      : 'TRCK';
 
   @override
   void onInit() {
@@ -74,7 +74,7 @@ class BleController extends GetxController {
         final name = result.device.platformName.isNotEmpty
             ? result.device.platformName
             : result.advertisementData.advName;
-        if (name.contains('Goodix_GUS') ||
+        if (name.contains('TRCK') ||
             result.advertisementData.serviceUuids.any(
               (uuid) =>
                   uuid.toString().toLowerCase() ==
@@ -93,7 +93,7 @@ class BleController extends GetxController {
     scanDevices.clear();
     try {
       await _ble.startScan();
-      _log('SYS', '开始扫描 Goodix_GUS', false);
+      _log('SYS', '开始扫描 TRCK', false);
     } catch (error) {
       _log('ERR', '扫描失败: $error', true);
     }

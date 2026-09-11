@@ -5,13 +5,13 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>用于扫描、连接和联调 Goodix 蓝牙手环。</string>
+	<string>用于扫描、连接和联调 TRCK 蓝牙手环。</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>用于与 Goodix 蓝牙手环交换设备数据。</string>
+	<string>用于与 TRCK 蓝牙手环交换设备数据。</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Goodix Ble Tool</string>
+	<string>TRCK Ble Tool</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -19,7 +19,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>goodix_ble_tool</string>
+	<string>TRCK</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

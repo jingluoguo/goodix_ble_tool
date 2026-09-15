@@ -11,6 +11,7 @@ import '../models/ble_models.dart';
 import '../services/ble_service.dart';
 import '../services/gus_protocol.dart';
 import '../services/history_export_service.dart';
+import '../services/log_export_service.dart';
 
 class BleController extends GetxController {
   final BleService _ble = BleService();
@@ -33,8 +34,9 @@ class BleController extends GetxController {
   final connectionError = RxnString();
   final selectedDevice = Rxn<BluetoothDevice>();
   final historyCapacity = Rxn<TempHistoryCapacity>();
-  final exportingHistory = false.obs;
+  final exporting = false.obs;
   final HistoryExportService _historyExport = const HistoryExportService();
+  final LogExportService _logExport = const LogExportService();
 
   /// 当前正在跑的异步测量项（HR / HRV / SpO2），null 表示空闲。
   final measureKind = Rxn<MeasureKind>();
@@ -60,8 +62,15 @@ class BleController extends GetxController {
   Timer? _measureTimeoutTimer;
   Timer? _measureTicker;
 
+  /// 是否成功建立过连接。
+  ///
+  /// 断开后页面不再整页切成占位视图（否则日志 / 历史 / 测量结果全丢），
+  /// 只把命令下发置灰，靠它区分「连过又断了」和「从没连上」。
+  final hasSession = false.obs;
+
   bool get isConnected =>
       connectionState.value == BluetoothConnectionState.connected;
+
   bool get busy => pendingLabels.isNotEmpty;
 
   /// 是否有异步测量链在跑；HR / HRV / SpO2 必须串行。
@@ -142,6 +151,7 @@ class BleController extends GetxController {
       if (state == BluetoothConnectionState.connected) {
         connecting.value = false;
         connectionError.value = null;
+        hasSession.value = true;
         _log('SYS', '已连接，开始发现服务', false);
         await discoverServices();
       } else if (state == BluetoothConnectionState.disconnected) {
@@ -160,6 +170,7 @@ class BleController extends GetxController {
       if (device.isConnected) {
         connectionState.value = BluetoothConnectionState.connected;
         connecting.value = false;
+        hasSession.value = true;
         await discoverServices();
       }
     } catch (error) {
@@ -440,33 +451,83 @@ class BleController extends GetxController {
     records: history.toList(),
   );
 
-  Future<void> shareHistory() async {
-    if (history.isEmpty) {
-      Get.snackbar('暂无数据', '请先读取温度历史');
+  String logExportText() => _logExport.buildText(
+    deviceName: deviceName,
+    deviceId: selectedDevice.value?.remoteId.toString() ?? '',
+    entries: logs.toList(),
+  );
+
+  Future<void> shareHistory() => _share(
+    empty: history.isEmpty,
+    emptyHint: '请先读取温度历史',
+    fileName: 'goodix_temperature_history',
+    title: '温度历史',
+    subject: 'Goodix GUS 温度历史',
+    text: historyExportText,
+  );
+
+  Future<void> saveHistory() => _save(
+    empty: history.isEmpty,
+    emptyHint: '请先读取温度历史',
+    fileName: 'goodix_temperature_history',
+    text: historyExportText,
+  );
+
+  Future<void> shareLogs() => _share(
+    empty: logs.isEmpty,
+    emptyHint: '暂无联调日志',
+    fileName: 'goodix_debug_log',
+    title: '联调日志',
+    subject: 'Goodix GUS 联调日志',
+    text: logExportText,
+  );
+
+  Future<void> saveLogs() => _save(
+    empty: logs.isEmpty,
+    emptyHint: '暂无联调日志',
+    fileName: 'goodix_debug_log',
+    text: logExportText,
+  );
+
+  Future<void> _share({
+    required bool empty,
+    required String emptyHint,
+    required String fileName,
+    required String title,
+    required String subject,
+    required String Function() text,
+  }) async {
+    if (empty) {
+      Get.snackbar('暂无数据', emptyHint);
       return;
     }
-    await _runHistoryExport(() async {
-      final name = _historyFileName();
-      final bytes = Uint8List.fromList(utf8.encode(historyExportText()));
+    await _runExport(() async {
+      final name = _exportFileName(fileName);
+      final bytes = Uint8List.fromList(utf8.encode(text()));
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile.fromData(bytes, mimeType: 'text/plain')],
           fileNameOverrides: [name],
-          title: '温度历史',
-          subject: 'Goodix GUS 温度历史',
+          title: title,
+          subject: subject,
         ),
       );
     });
   }
 
-  Future<void> saveHistory() async {
-    if (history.isEmpty) {
-      Get.snackbar('暂无数据', '请先读取温度历史');
+  Future<void> _save({
+    required bool empty,
+    required String emptyHint,
+    required String fileName,
+    required String Function() text,
+  }) async {
+    if (empty) {
+      Get.snackbar('暂无数据', emptyHint);
       return;
     }
-    await _runHistoryExport(() async {
-      final name = _historyFileName();
-      final bytes = Uint8List.fromList(utf8.encode(historyExportText()));
+    await _runExport(() async {
+      final name = _exportFileName(fileName);
+      final bytes = Uint8List.fromList(utf8.encode(text()));
       String? path;
       try {
         path = await FileSaver.instance.saveAs(
@@ -490,20 +551,20 @@ class BleController extends GetxController {
     });
   }
 
-  Future<void> _runHistoryExport(Future<void> Function() action) async {
-    if (exportingHistory.value) return;
-    exportingHistory.value = true;
+  Future<void> _runExport(Future<void> Function() action) async {
+    if (exporting.value) return;
+    exporting.value = true;
     try {
       await action();
     } catch (error) {
       Get.snackbar('导出失败', '$error');
     } finally {
-      exportingHistory.value = false;
+      exporting.value = false;
     }
   }
 
-  String _historyFileName() =>
-      'goodix_temperature_history_${DateTime.now().millisecondsSinceEpoch}';
+  String _exportFileName(String prefix) =>
+      '${prefix}_${DateTime.now().millisecondsSinceEpoch}';
 
   int _allocateFrameId() {
     final id = _nextFrameId++ & 0xFF;

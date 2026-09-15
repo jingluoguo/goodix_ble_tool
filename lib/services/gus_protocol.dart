@@ -104,15 +104,12 @@ class GusProtocol {
   static List<int> queryBattery() => frame(3, 0x12, 0);
   static List<int> queryCharging() => frame(4, 0x12, 1);
   static List<int> queryDeviceTime() => frame(5, 0x10, 1);
-  static List<int> setDeviceTime() {
-    final bytes = Uint8List(8);
-    ByteData.view(bytes.buffer).setUint64(
-      0,
-      DateTime.now().toUtc().millisecondsSinceEpoch,
-      Endian.little,
-    );
-    return frame(6, 0x10, 0, bytes.toList());
-  }
+  static List<int> setDeviceTime() => frame(
+    6,
+    0x10,
+    0,
+    encodeUint64Le(DateTime.now().toUtc().millisecondsSinceEpoch),
+  );
 
   /// 0x34/0x00 体温同步直读，不受测量互斥限制，可随时插队。
   static List<int> readTemperature() => frame(7, temperatureCommand, 0);
@@ -199,11 +196,32 @@ class GusProtocol {
       .map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase())
       .join(' ');
 
+  /// 8 字节小端 uint64（用于 epoch ms）。
+  ///
+  /// 不用 `ByteData.setUint64` / `getUint64`：这两个访问器在 dart2js 上会抛
+  /// `Unsupported operation`，位运算 `<< >> &` 在 web 上也只作用于低 32 位。
+  /// 这里统一用整除与取余，保证 VM 与 web 结果一致。
+  static List<int> encodeUint64Le(int value) {
+    final bytes = <int>[];
+    var rest = value;
+    for (var i = 0; i < 8; i++) {
+      bytes.add(rest % 256);
+      rest = rest ~/ 256;
+    }
+    return bytes;
+  }
+
+  static int decodeUint64Le(List<int> bytes, int offset) {
+    var value = 0;
+    for (var i = offset + 7; i >= offset; i--) {
+      value = value * 256 + bytes[i];
+    }
+    return value;
+  }
+
   static DateTime parseDeviceTime(List<int> bytes) {
     if (bytes.length < 12) throw const FormatException('设备时间帧长度不足');
-    final ms = ByteData.sublistView(
-      Uint8List.fromList(bytes),
-    ).getUint64(4, Endian.little);
+    final ms = decodeUint64Le(bytes, 4);
     return DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true).toLocal();
   }
 
@@ -219,9 +237,7 @@ class GusProtocol {
           : '充电状态: ${bytes[4] == 0 ? '未充电' : '充电中'}';
     }
     if (cmd == 0x10 && sub == 1 && bytes.length >= 12) {
-      final ms = ByteData.sublistView(
-        Uint8List.fromList(bytes),
-      ).getUint64(4, Endian.little);
+      final ms = decodeUint64Le(bytes, 4);
       return '设备时间: ${DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true).toLocal()}';
     }
     if (cmd == temperatureCommand && bytes.length >= 7) {
@@ -282,7 +298,7 @@ class GusProtocol {
       records.add(
         TempHistoryRecord(
           seq: data.getUint32(offset, Endian.little),
-          unixMs: data.getUint64(offset + 4, Endian.little),
+          unixMs: decodeUint64Le(bytes, offset + 4),
           temperatureX100: data.getInt16(offset + 12, Endian.little),
           valid: bytes[offset + 14] & 1 != 0,
         ),

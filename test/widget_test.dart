@@ -86,6 +86,40 @@ void main() {
     );
   });
 
+  test('8 字节小端时间戳编解码', () {
+    expect(
+      GusProtocol.hex(GusProtocol.encodeUint64Le(1789473600000)),
+      '00 32 F0 A4 A0 01 00 00',
+    );
+    expect(
+      GusProtocol.decodeUint64Le(<int>[
+        0x00,
+        0x32,
+        0xF0,
+        0xA4,
+        0xA0,
+        0x01,
+        0x00,
+        0x00,
+      ], 0),
+      1789473600000,
+    );
+    // 带偏移读取（帧内时间戳从第 4 字节开始）
+    final frame = <int>[
+      0x00,
+      0x02,
+      0x10,
+      0x01,
+      ...GusProtocol.encodeUint64Le(1789473600000),
+      0x00,
+    ];
+    expect(frame.length, 13);
+    expect(
+      GusProtocol.parseDeviceTime(frame).toUtc().millisecondsSinceEpoch,
+      1789473600000,
+    );
+  });
+
   test('history packets parse little-endian temperature records', () {
     final packet = <int>[
       0x00,

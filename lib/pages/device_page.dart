@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../controllers/ble_controller.dart';
 import '../core/app_theme.dart';
+import '../models/ble_models.dart';
 import '../widgets/section_card.dart';
 import '../widgets/status_pill.dart';
 
@@ -176,34 +177,72 @@ class DevicePage extends StatelessWidget {
   );
 
   Widget _metrics() => Obx(
-    () => Row(
+    () => Column(
       children: [
-        Expanded(
-          child: _metric(
-            '电量',
-            controller.battery.value == null
-                ? '--'
-                : '${controller.battery.value}%',
-            Icons.battery_5_bar_outlined,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _metric(
+                '电量',
+                controller.battery.value == null
+                    ? '--'
+                    : '${controller.battery.value}%',
+                Icons.battery_5_bar_outlined,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _metric(
+                '体温',
+                controller.liveTemperature.value?.celsius == null
+                    ? '--'
+                    : '${controller.liveTemperature.value!.celsius!.toStringAsFixed(2)}°',
+                Icons.thermostat_outlined,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _metric(
+                'MTU',
+                '${controller.mtu.value}',
+                Icons.swap_vert_circle_outlined,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _metric(
-            '实时温度',
-            controller.liveTemperature.value?.celsius == null
-                ? '--'
-                : '${controller.liveTemperature.value!.celsius!.toStringAsFixed(2)}°',
-            Icons.thermostat_outlined,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _metric(
-            'MTU',
-            '${controller.mtu.value}',
-            Icons.swap_vert_circle_outlined,
-          ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _metric(
+                '心率',
+                controller.heartRate.value == null
+                    ? '--'
+                    : '${controller.heartRate.value} bpm',
+                Icons.monitor_heart_outlined,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _metric(
+                'HRV',
+                controller.hrv.value == null
+                    ? '--'
+                    : '${controller.hrv.value} ms',
+                Icons.graphic_eq,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _metric(
+                '血氧',
+                controller.spo2.value == null
+                    ? '--'
+                    : '${controller.spo2.value} %',
+                Icons.water_drop_outlined,
+              ),
+            ),
+          ],
         ),
       ],
     ),
@@ -216,23 +255,33 @@ class DevicePage extends StatelessWidget {
         children: [
           Icon(icon, color: AppTheme.mint, size: 24),
           const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(color: AppTheme.muted, fontSize: 12),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.ink,
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppTheme.muted, fontSize: 12),
                 ),
-              ),
-            ],
+                const SizedBox(height: 3),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -301,30 +350,146 @@ class DevicePage extends StatelessWidget {
             )
           : const SizedBox.shrink(),
     ),
-    child: Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _command('查询软件版本', '软件版本', Icons.code, controller.querySoftware),
-        _command(
-          '查询硬件版本',
-          '硬件版本',
-          Icons.memory_outlined,
-          controller.queryHardware,
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _command('查询软件版本', '软件版本', Icons.code, controller.querySoftware),
+            _command(
+              '查询硬件版本',
+              '硬件版本',
+              Icons.memory_outlined,
+              controller.queryHardware,
+            ),
+            _command(
+              '查询电量',
+              '查询电量',
+              Icons.battery_std,
+              controller.queryBattery,
+            ),
+            _command('查询充电状态', '充电状态', Icons.power, controller.queryCharging),
+            _command('查询设备时间', '设备时间', Icons.schedule, controller.queryTime),
+            _command('同步设备时间', '同步时间', Icons.sync, controller.syncTime),
+          ],
         ),
-        _command('查询电量', '查询电量', Icons.battery_std, controller.queryBattery),
-        _command('查询充电状态', '充电状态', Icons.power, controller.queryCharging),
-        _command('查询设备时间', '设备时间', Icons.schedule, controller.queryTime),
-        _command('同步设备时间', '同步时间', Icons.sync, controller.syncTime),
-        _command(
-          '开启实时温度',
-          '开启温度',
-          Icons.thermostat,
-          controller.startTemperature,
+        const SizedBox(height: 16),
+        const Divider(height: 1),
+        const SizedBox(height: 14),
+        const Text(
+          '测量',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.ink,
+          ),
         ),
+        const SizedBox(height: 4),
+        const Text(
+          'HR / HRV / SpO2 需串行执行；体温为同步直读，可随时插队',
+          style: TextStyle(fontSize: 11.5, color: AppTheme.muted),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _measureButton(MeasureKind.temperature),
+            _measureButton(MeasureKind.hr),
+            _measureButton(MeasureKind.hrv),
+            _measureButton(MeasureKind.spo2),
+          ],
+        ),
+        _measureStatusLine(),
       ],
     ),
   );
+
+  IconData _measureIcon(MeasureKind kind) => switch (kind) {
+    MeasureKind.temperature => Icons.thermostat,
+    MeasureKind.hr => Icons.monitor_heart_outlined,
+    MeasureKind.hrv => Icons.graphic_eq,
+    MeasureKind.spo2 => Icons.water_drop_outlined,
+  };
+
+  /// 测量按钮：空闲时是「XX测量」，开跑后原地变成「停止测量」（发 0x38/0x00）。
+  Widget _measureButton(MeasureKind kind) => Obx(() {
+    final running = controller.measureKind.value == kind;
+    if (running) {
+      final stopping = controller.pendingLabels.contains('停止测量');
+      return FilledButton.icon(
+        onPressed: stopping ? null : controller.stopMeasure,
+        style: FilledButton.styleFrom(
+          backgroundColor: AppTheme.orange,
+          foregroundColor: Colors.white,
+        ),
+        icon: stopping
+            ? const SizedBox(
+                width: 17,
+                height: 17,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.stop_circle_outlined, size: 18),
+        label: Text(stopping ? '正在停止' : '停止测量'),
+      );
+    }
+    final waiting = controller.pendingLabels.contains(kind.label);
+    final enabled = controller.canMeasure(kind) && !waiting;
+    return OutlinedButton.icon(
+      onPressed: enabled ? () => controller.startMeasure(kind) : null,
+      icon: waiting
+          ? const SizedBox(
+              width: 17,
+              height: 17,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(_measureIcon(kind), size: 17),
+      label: Text(waiting ? '等待响应' : kind.label),
+    );
+  });
+
+  Widget _measureStatusLine() => Obx(() {
+    final kind = controller.measureKind.value;
+    if (kind != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '采集中 · ${kind.label} · 已用 ${controller.measureElapsed.value}s'
+                '（固件默认 ${kind.defaultDurationS}s）',
+                style: const TextStyle(fontSize: 12, color: AppTheme.mint),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    final outcome = controller.measureOutcome.value;
+    if (outcome == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Text(
+        '上次结果 · ${outcome.kind.label}：${outcome.summary}',
+        style: TextStyle(
+          fontSize: 12,
+          color: outcome.valid ? AppTheme.muted : Colors.redAccent,
+        ),
+      ),
+    );
+  });
 
   Widget _command(
     String pendingLabel,

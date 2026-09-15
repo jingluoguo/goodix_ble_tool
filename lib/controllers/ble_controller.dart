@@ -36,20 +36,41 @@ class BleController extends GetxController {
   final exportingHistory = false.obs;
   final HistoryExportService _historyExport = const HistoryExportService();
 
+  /// 当前正在跑的异步测量项（HR / HRV / SpO2），null 表示空闲。
+  final measureKind = Rxn<MeasureKind>();
+  final measureStartedAt = Rxn<DateTime>();
+  final measureElapsed = 0.obs;
+  final measureOutcome = Rxn<MeasureOutcome>();
+  final heartRate = RxnInt();
+  final hrv = RxnInt();
+  final spo2 = RxnInt();
+
   StreamSubscription<BluetoothAdapterState>? _adapterSubscription;
   StreamSubscription<bool>? _scanningSubscription;
   StreamSubscription<BluetoothConnectionState>? _connectionSubscription;
   StreamSubscription<int>? _mtuSubscription;
-  int _nextHistoryId = 0x20;
+  int _nextFrameId = 0x20;
   int? _activeHistoryId;
   String? _activeHistoryLabel;
   int? _lastPacketIndex;
   bool _historyStarted = false;
   bool _servicesInitializing = false;
+  int? _activeMeasureId;
+  MeasureKind? _activeMeasureKind;
+  Timer? _measureTimeoutTimer;
+  Timer? _measureTicker;
 
   bool get isConnected =>
       connectionState.value == BluetoothConnectionState.connected;
   bool get busy => pendingLabels.isNotEmpty;
+
+  /// 是否有异步测量链在跑；HR / HRV / SpO2 必须串行。
+  bool get isMeasuring => measureKind.value != null;
+
+  /// 温度是同步直读、可随时插队，其余测量项需等当前测量链结束。
+  bool canMeasure(MeasureKind kind) =>
+      isConnected && (!kind.occupiesChain || !isMeasuring);
+
   bool get isGoodix =>
       selectedDevice.value?.platformName.contains('TRCK') ?? false;
   BluetoothCharacteristic? get rx =>
@@ -111,6 +132,7 @@ class BleController extends GetxController {
     services.clear();
     pendingLabels.clear();
     pendingLabels.refresh();
+    _resetMeasure();
     connectionState.value = device.isConnected
         ? BluetoothConnectionState.connected
         : BluetoothConnectionState.disconnected;
@@ -126,6 +148,8 @@ class BleController extends GetxController {
         if (connecting.value) return;
         services.clear();
         _clearAllPending();
+        // 断连会自动中止设备侧测量，本地状态一并复位。
+        _resetMeasure(keepOutcome: true);
         _log('SYS', '设备已断开', false);
       }
     });
@@ -155,8 +179,11 @@ class BleController extends GetxController {
     final device = selectedDevice.value;
     if (device == null) return;
     try {
+      // 手册要求：退出测量页 / 切换测量项 / 用户取消时先发 0x38 解锁设备。
+      if (isMeasuring) await _sendStopMeasure();
       await _ble.disconnect(device);
       _clearAllPending();
+      _resetMeasure(keepOutcome: true);
     } catch (error) {
       _log('ERR', '断开失败: $error', true);
     }
@@ -183,22 +210,39 @@ class BleController extends GetxController {
     }
   }
 
-  Future<void> send(String label, List<int> frame) async {
+  /// 底层写入：只负责找到 RX 特征、写帧、打日志。成功返回 true。
+  Future<bool> _writeFrame(String label, List<int> frame) async {
     final characteristic = rx;
     if (!isConnected || characteristic == null) {
+      _log('ERR', '$label: 未找到 GUS RX 或设备未连接', true);
+      return false;
+    }
+    _log('TX', '$label  ${GusProtocol.hex(frame)}', false);
+    try {
+      await _ble.write(characteristic, frame);
+      return true;
+    } catch (error) {
+      _log('ERR', '$label 失败: $error', true);
+      return false;
+    }
+  }
+
+  Future<void> send(
+    String label,
+    List<int> frame, {
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    if (!isConnected || rx == null) {
       _log('ERR', '$label: 未找到 GUS RX 或设备未连接', true);
       return;
     }
     _setPending(label, true);
-    _log('TX', '$label  ${GusProtocol.hex(frame)}', false);
-    try {
-      await _ble.write(characteristic, frame);
-    } catch (error) {
+    final written = await _writeFrame(label, frame);
+    if (!written) {
       _setPending(label, false);
-      _log('ERR', '$label 失败: $error', true);
       return;
     }
-    Future<void>.delayed(const Duration(seconds: 8), () {
+    Future<void>.delayed(timeout, () {
       if (pendingLabels.contains(label)) {
         _setPending(label, false);
         _log('ERR', '$label 等待响应超时', true);
@@ -218,14 +262,160 @@ class BleController extends GetxController {
     await send('同步设备时间', GusProtocol.setDeviceTime());
   }
 
-  Future<void> startTemperature() =>
-      send('开启实时温度', GusProtocol.startTemperature());
+  // ---------------------------------------------------------------- 测量
+
+  /// 开始一次测量。
+  ///
+  /// 温度走 0x34/0x00 同步直读；HR / HRV / SpO2 是异步链，
+  /// 发出后按钮即切换为「停止测量」，等结果帧或超时才复位。
+  Future<void> startMeasure(MeasureKind kind) async {
+    if (!isConnected) {
+      Get.snackbar('未连接', '请先连接设备');
+      return;
+    }
+    if (!kind.occupiesChain) {
+      await send(kind.label, GusProtocol.readTemperature());
+      return;
+    }
+    if (isMeasuring) {
+      Get.snackbar('测量进行中', '${measureKind.value!.label}尚未结束，请先停止');
+      return;
+    }
+    final id = _allocateFrameId();
+    _activeMeasureId = id;
+    _activeMeasureKind = kind;
+    measureKind.value = kind;
+    measureStartedAt.value = DateTime.now();
+    measureElapsed.value = 0;
+    _startMeasureTicker();
+    _armMeasureTimeout(id, kind);
+    final written = await _writeFrame(
+      kind.label,
+      GusProtocol.measure(id, kind),
+    );
+    if (!written) _resetMeasure(keepOutcome: true);
+  }
+
+  /// 0x38/0x00 停止当前测量，任何状态下都可发。
+  Future<void> stopMeasure() async {
+    if (!isMeasuring) {
+      Get.snackbar('当前无测量', '没有正在进行的测量');
+      return;
+    }
+    final label = measureKind.value!.label;
+    await _sendStopMeasure();
+    _log('SYS', '已请求停止$label，本次采集数据丢弃', false);
+    _resetMeasure(keepOutcome: true);
+  }
+
+  Future<void> _sendStopMeasure() => send(
+    '停止测量',
+    GusProtocol.stopMeasure(_allocateFrameId()),
+    timeout: const Duration(seconds: 3),
+  );
+
+  void _armMeasureTimeout(int id, MeasureKind kind) {
+    _measureTimeoutTimer?.cancel();
+    _measureTimeoutTimer = Timer(kind.timeout, () {
+      if (_activeMeasureId != id) return;
+      _log('ERR', '${kind.label}等待结果超时（${kind.timeout.inSeconds}s）', true);
+      _resetMeasure(keepOutcome: true);
+    });
+  }
+
+  void _startMeasureTicker() {
+    _measureTicker?.cancel();
+    _measureTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      final started = measureStartedAt.value;
+      if (started == null) return;
+      measureElapsed.value = DateTime.now().difference(started).inSeconds;
+    });
+  }
+
+  void _resetMeasure({bool keepOutcome = false}) {
+    _measureTimeoutTimer?.cancel();
+    _measureTimeoutTimer = null;
+    _measureTicker?.cancel();
+    _measureTicker = null;
+    _activeMeasureId = null;
+    _activeMeasureKind = null;
+    measureKind.value = null;
+    measureStartedAt.value = null;
+    measureElapsed.value = 0;
+    if (!keepOutcome) measureOutcome.value = null;
+  }
+
+  void _handleMeasure(List<int> value) {
+    final MeasureResponse response;
+    try {
+      response = GusProtocol.parseMeasure(value);
+    } catch (error) {
+      _log('ERR', '测量响应解析失败: $error', true);
+      return;
+    }
+    final kind = _activeMeasureKind;
+    if (kind == null || _activeMeasureId != response.frameId) {
+      _log('SYS', '忽略非本次测量的响应（frame_id=${response.frameId}）', false);
+      return;
+    }
+    if (response.accepted) {
+      _log(
+        'SYS',
+        '${kind.label}已受理，采集中…（固件默认 ${kind.defaultDurationS}s）',
+        false,
+      );
+      return;
+    }
+    if (response.aborted) {
+      _log('ERR', '${kind.label}未佩戴或测量中断，本次结果无效', true);
+      _resetMeasure(keepOutcome: true);
+      return;
+    }
+    if (response.rejected) {
+      _log('ERR', '${kind.label}被设备拒绝：繁忙（上一条测量链未结束）', true);
+      _resetMeasure(keepOutcome: true);
+      return;
+    }
+    if (!response.isResult) {
+      _log(
+        'SYS',
+        '${kind.label}未知状态 ${GusProtocol.measureStatusLabel(response.status)}',
+        false,
+      );
+      return;
+    }
+    // status=0x01 也可能全是 0（超时结束），必须再判数据位。
+    final hrValue = response.hr;
+    final hrvValue = response.hrv;
+    final spo2Value = response.spo2;
+    final hasHr = hrValue != null && hrValue > 0;
+    final hasHrv = hrvValue != null && hrvValue > 0;
+    final hasSpo2 = spo2Value != null && spo2Value > 0;
+    if (kind == MeasureKind.hr && hasHr) heartRate.value = hrValue;
+    if (kind == MeasureKind.hrv && hasHrv) hrv.value = hrvValue;
+    if (kind == MeasureKind.spo2 && hasSpo2) spo2.value = spo2Value;
+    final outcome = MeasureOutcome(
+      kind: kind,
+      time: DateTime.now(),
+      hr: hrValue,
+      hrv: hrvValue,
+      spo2: spo2Value,
+      valid: hasHr || hasHrv || hasSpo2,
+    );
+    measureOutcome.value = outcome;
+    _log(
+      outcome.valid ? 'SYS' : 'ERR',
+      '${kind.label}结果：${outcome.summary}',
+      !outcome.valid,
+    );
+    _resetMeasure(keepOutcome: true);
+  }
 
   Future<void> queryHistoryCapacity() async =>
-      send('查询历史容量', GusProtocol.historyCapacity(_allocateHistoryId()));
+      send('查询历史容量', GusProtocol.historyCapacity(_allocateFrameId()));
 
   Future<void> readHistory({required bool all}) async {
-    final id = _allocateHistoryId();
+    final id = _allocateFrameId();
     _activeHistoryId = id;
     _lastPacketIndex = null;
     _historyStarted = false;
@@ -241,7 +431,7 @@ class BleController extends GetxController {
     _activeHistoryId = null;
     _activeHistoryLabel = null;
     _historyStarted = false;
-    await send('停止历史上传', GusProtocol.stopHistory(_allocateHistoryId()));
+    await send('停止历史上传', GusProtocol.stopHistory(_allocateFrameId()));
   }
 
   String historyExportText() => _historyExport.buildText(
@@ -315,9 +505,9 @@ class BleController extends GetxController {
   String _historyFileName() =>
       'goodix_temperature_history_${DateTime.now().millisecondsSinceEpoch}';
 
-  int _allocateHistoryId() {
-    final id = _nextHistoryId++ & 0xFF;
-    if (_nextHistoryId > 0xFF) _nextHistoryId = 0x20;
+  int _allocateFrameId() {
+    final id = _nextFrameId++ & 0xFF;
+    if (_nextFrameId > 0xFF) _nextFrameId = 0x20;
     return id;
   }
 
@@ -347,7 +537,9 @@ class BleController extends GetxController {
         deviceTime.value ??= DateTime.now();
       }
       _clearPending(sub == 0 ? '同步设备时间' : '查询设备时间');
-    } else if (cmd == 0x34 && sub == 0 && value.length >= 7) {
+    } else if (cmd == GusProtocol.temperatureCommand &&
+        sub == 0 &&
+        value.length >= 7) {
       final raw = value[5] | value[6] << 8;
       final signed = raw > 32767 ? raw - 65536 : raw;
       liveTemperature.value = TemperatureSample(
@@ -355,7 +547,13 @@ class BleController extends GetxController {
         celsius: value[4] == 1 ? signed / 100 : null,
         valid: value[4] == 1,
       );
-      _clearPending('开启实时温度');
+      _clearPending(MeasureKind.temperature.label);
+    } else if (GusProtocol.isMeasureCommand(cmd)) {
+      _handleMeasure(value);
+    } else if (cmd == GusProtocol.stopMeasureCommand && sub == 0) {
+      final code = value.length > 4 ? value[4] : 0;
+      _log('SYS', '停止测量响应：${GusProtocol.stopMeasureLabel(code)}', false);
+      _clearPending('停止测量');
     } else if (cmd == GusProtocol.localDataCommand) {
       _handleHistory(value);
     }
@@ -461,6 +659,8 @@ class BleController extends GetxController {
     _scanningSubscription?.cancel();
     _connectionSubscription?.cancel();
     _mtuSubscription?.cancel();
+    _measureTimeoutTimer?.cancel();
+    _measureTicker?.cancel();
     _ble.dispose();
     super.onClose();
   }

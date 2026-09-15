@@ -42,8 +42,6 @@ class HomePage extends GetView<BleController> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(22, 26, 22, 40),
                 children: [
-                  _hero(),
-                  const SizedBox(height: 24),
                   Obx(() => _scanCard()),
                   const SizedBox(height: 16),
                   _workflowCard(),
@@ -68,64 +66,6 @@ class HomePage extends GetView<BleController> {
         return '蓝牙状态检测中';
     }
   }
-
-  Widget _hero() => Container(
-    padding: const EdgeInsets.all(24),
-    decoration: BoxDecoration(
-      color: AppTheme.ink,
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '设备联调工作台',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Goodix GUS · 温度手环协议验证',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: .68),
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: const [
-                  _Tag(label: 'GUS UART'),
-                  _Tag(label: 'Notify'),
-                  _Tag(label: '历史分包'),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Container(
-          width: 76,
-          height: 76,
-          decoration: BoxDecoration(
-            color: AppTheme.mint.withValues(alpha: .2),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: const Icon(
-            Icons.bluetooth_searching,
-            color: Color(0xFF74D4C0),
-            size: 40,
-          ),
-        ),
-      ],
-    ),
-  );
 
   Widget _scanCard() {
     final devices = controller.scanDevices.values.toList();
@@ -229,23 +169,6 @@ class HomePage extends GetView<BleController> {
             ),
           ),
       ],
-    ),
-  );
-}
-
-class _Tag extends StatelessWidget {
-  final String label;
-  const _Tag({required this.label});
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: .1),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Text(
-      label,
-      style: const TextStyle(color: Colors.white, fontSize: 11),
     ),
   );
 }

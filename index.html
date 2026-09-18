@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111816" />
+    <meta name="description" content="TRCK - Goodix GUS 温度手环 BLE 联调工作台" />
+    <title>TRCK | BLE 温度手环联调工具</title>
+    <link rel="icon" type="image/png" href="web/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      :root {
+        --ink: #111816;
+        --ink-soft: #27342f;
+        --paper: #f3f2eb;
+        --paper-deep: #e8e8df;
+        --line: #cbd0c8;
+        --mint: #c8ff5e;
+        --cyan: #a9e9e1;
+        --orange: #ff8450;
+        --muted: #65716a;
+        --mono: "DM Mono", monospace;
+        --sans: "Noto Sans SC", sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--paper);
+        font-family: var(--sans);
+        letter-spacing: 0;
+      }
+      a { color: inherit; text-decoration: none; }
+      button { font: inherit; }
+
+      .topbar {
+        height: 40px;
+        display: flex;
+        align-items: center;
+        overflow: hidden;
+        color: #d9e5dc;
+        background: var(--ink);
+        font: 12px var(--mono);
+        border-bottom: 1px solid #34423c;
+      }
+      .ticker {
+        display: flex;
+        width: max-content;
+        white-space: nowrap;
+        animation: crawl 30s linear infinite;
+      }
+      .ticker span { padding: 0 24px; }
+      .ticker b { color: var(--mint); font-weight: 500; }
+      @keyframes crawl { to { transform: translateX(-50%); } }
+
+      .nav, .container { width: min(1180px, calc(100% - 48px)); margin: auto; }
+      .nav {
+        min-height: 80px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .brand { display: flex; align-items: center; gap: 11px; font-weight: 800; font-size: 20px; }
+      .brand-mark {
+        width: 33px; height: 33px; display: grid; place-items: center;
+        color: var(--ink); background: var(--mint); border: 2px solid var(--ink);
+      }
+      .brand-mark i { width: 18px; height: 18px; stroke-width: 2.7; }
+      .nav-links { display: flex; gap: 30px; align-items: center; font-size: 14px; font-weight: 600; }
+      .nav-links a:not(.nav-download) { border-bottom: 1px solid transparent; }
+      .nav-links a:not(.nav-download):hover { border-color: currentColor; }
+      .nav-download {
+        padding: 10px 15px; background: var(--ink); color: var(--paper); font-size: 13px;
+      }
+
+      .hero {
+        min-height: 680px;
+        position: relative;
+        overflow: hidden;
+        background: var(--ink);
+        color: var(--paper);
+      }
+      .hero::before {
+        content: ""; position: absolute; inset: 0;
+        background-image: linear-gradient(rgba(196, 255, 91, .085) 1px, transparent 1px), linear-gradient(90deg, rgba(196, 255, 91, .085) 1px, transparent 1px);
+        background-size: 42px 42px;
+        mask-image: linear-gradient(90deg, #000 0%, rgba(0,0,0,.7) 48%, transparent 88%);
+      }
+      .hero .container { position: relative; min-height: 600px; display: grid; grid-template-columns: 1.08fr .92fr; gap: 50px; align-items: center; }
+      .eyebrow, .section-kicker { display: flex; align-items: center; gap: 9px; font: 12px var(--mono); }
+      .eyebrow { color: var(--mint); }
+      .eyebrow::before, .section-kicker::before { content: ""; width: 8px; height: 8px; background: currentColor; }
+      h1 { max-width: 700px; margin: 19px 0 20px; font-size: clamp(43px, 5.1vw, 76px); line-height: 1.12; font-weight: 800; }
+      h1 em { color: var(--mint); font-style: normal; }
+      .hero-copy { max-width: 490px; color: #b7c3bb; font-size: 17px; line-height: 1.85; }
+      .cta-row { display: flex; align-items: center; gap: 18px; margin-top: 31px; }
+      .download-button {
+        display: inline-flex; align-items: center; gap: 10px;
+        padding: 15px 20px; background: var(--mint); color: var(--ink);
+        font-weight: 800; box-shadow: 5px 5px 0 var(--orange); transition: transform .2s, box-shadow .2s;
+      }
+      .download-button:hover { transform: translate(3px, 3px); box-shadow: 2px 2px 0 var(--orange); }
+      .download-button i { width: 19px; }
+      .android-note { color: #9ba8a0; font: 12px var(--mono); line-height: 1.6; }
+      .android-note b { color: var(--paper); font-weight: 500; }
+      .signal { position: absolute; left: 0; bottom: 26px; display: flex; gap: 7px; align-items: center; color: #9eaea5; font: 11px var(--mono); }
+      .signal span { width: 32px; height: 1px; background: var(--mint); }
+
+      .phone-stage { position: relative; height: 535px; align-self: end; }
+      .hero-phone {
+        position: absolute; width: 260px; height: 524px; right: 70px; bottom: -1px;
+        padding: 8px; border: 2px solid #5d6a63; border-radius: 26px 26px 0 0;
+        background: #08100d; box-shadow: -21px 22px 0 rgba(169,233,225,.95);
+        transform: rotate(5deg); overflow: hidden;
+      }
+      .hero-phone::before { content: ""; position: absolute; z-index: 2; top: 11px; left: 50%; transform: translateX(-50%); width: 76px; height: 18px; border-radius: 12px; background: #08100d; }
+      .hero-phone img { width: 100%; height: 100%; object-fit: cover; object-position: center top; border-radius: 18px 18px 0 0; }
+      .measure-tag {
+        position: absolute; right: 263px; top: 70px; z-index: 3; padding: 13px 14px;
+        background: var(--orange); color: #30160d; font: 12px var(--mono); font-weight: 500; box-shadow: 4px 4px 0 #0c120f;
+        transform: rotate(-4deg);
+      }
+      .measure-tag b { display: block; margin-top: 2px; font-size: 21px; }
+
+      .proof { border-bottom: 1px solid var(--line); background: var(--paper-deep); }
+      .proof-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
+      .proof-item { min-height: 128px; padding: 27px 24px; border-right: 1px solid var(--line); }
+      .proof-item:last-child { border-right: 0; }
+      .proof-item i { width: 21px; height: 21px; color: #315d57; }
+      .proof-item b { display: block; margin-top: 11px; font-size: 15px; }
+      .proof-item span { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; }
+
+      section { padding: 110px 0; }
+      .section-kicker { color: #39736d; }
+      .section-heading { margin: 15px 0 0; max-width: 720px; font-size: clamp(30px, 3.8vw, 51px); line-height: 1.25; }
+      .section-heading strong { color: #1f7168; }
+      .workflow { display: grid; grid-template-columns: 255px 1fr; gap: 70px; align-items: start; }
+      .workflow-intro { position: sticky; top: 20px; }
+      .workflow-intro p { color: var(--muted); font-size: 15px; line-height: 1.8; }
+      .workflow-list { border-top: 2px solid var(--ink); }
+      .workflow-row { display: grid; grid-template-columns: 90px 1fr 220px; gap: 20px; align-items: center; min-height: 140px; border-bottom: 1px solid var(--line); }
+      .step-number { color: #2d887e; font: 22px var(--mono); }
+      .workflow-row h3 { margin: 0 0 8px; font-size: 20px; }
+      .workflow-row p { margin: 0; max-width: 430px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+      .command { justify-self: end; padding: 10px 12px; color: #15564e; background: var(--cyan); font: 12px var(--mono); }
+
+      .gallery { background: #dce7e0; border-top: 1px solid #bdd0c4; border-bottom: 1px solid #bdd0c4; }
+      .gallery-head { display: flex; justify-content: space-between; align-items: end; margin-bottom: 48px; }
+      .gallery-copy { max-width: 340px; margin: 0; color: #53665d; font-size: 14px; line-height: 1.75; }
+      .screen-grid { display: grid; grid-template-columns: 1.05fr .88fr 1.05fr; gap: 28px; align-items: end; }
+      .screen { position: relative; }
+      .screen-label { display: flex; justify-content: space-between; margin: 0 0 10px; font: 12px var(--mono); }
+      .screen-label span { color: #527069; }
+      .screen-frame { overflow: hidden; border: 2px solid var(--ink); background: var(--ink); box-shadow: 8px 8px 0 var(--orange); }
+      .screen-frame img { display: block; width: 100%; height: 465px; object-fit: cover; object-position: top; }
+      .screen:nth-child(2) { transform: translateY(-35px); }
+      .screen:nth-child(2) .screen-frame { box-shadow: 8px 8px 0 var(--mint); }
+
+      .protocol { background: var(--ink); color: var(--paper); }
+      .protocol-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 82px; align-items: center; }
+      .protocol .section-kicker { color: var(--mint); }
+      .protocol .section-heading { color: var(--paper); }
+      .protocol .section-heading strong { color: var(--mint); }
+      .protocol-text { color: #adbdb3; line-height: 1.85; }
+      .protocol-card { border: 1px solid #46564d; background: #16211c; }
+      .protocol-card header { display: flex; justify-content: space-between; padding: 15px 17px; border-bottom: 1px solid #46564d; color: var(--mint); font: 12px var(--mono); }
+      .protocol-rows { padding: 8px 17px 13px; }
+      .protocol-row { display: grid; grid-template-columns: 1fr auto; padding: 13px 0; border-bottom: 1px solid #34433a; font: 13px var(--mono); }
+      .protocol-row:last-child { border: 0; }
+      .protocol-row span:last-child { color: var(--cyan); }
+      .protocol-footer { display: flex; align-items: center; gap: 9px; margin-top: 22px; color: #92a49a; font: 12px var(--mono); }
+      .protocol-footer i { color: var(--mint); width: 16px; }
+
+      .download-band { padding: 96px 0; background: var(--mint); }
+      .download-band .container { display: flex; align-items: end; justify-content: space-between; gap: 35px; }
+      .download-band h2 { max-width: 670px; margin: 0; font-size: clamp(32px, 4.2vw, 58px); line-height: 1.2; }
+      .download-band .download-button { background: var(--ink); color: var(--paper); box-shadow: 5px 5px 0 var(--orange); white-space: nowrap; }
+      footer { padding: 28px 0; color: #a9b9af; background: var(--ink); }
+      .footer-inner { display: flex; justify-content: space-between; align-items: center; gap: 20px; font: 12px var(--mono); }
+      .footer-brand { color: var(--paper); font-weight: 500; }
+      .footer-inner a { color: var(--mint); }
+
+      @media (max-width: 800px) {
+        .nav, .container { width: min(100% - 32px, 620px); }
+        .nav { min-height: 70px; }
+        .nav-links a:not(.nav-download) { display: none; }
+        .hero { min-height: 770px; }
+        .hero .container { display: block; min-height: 730px; padding-top: 58px; }
+        h1 { margin-top: 17px; font-size: 43px; }
+        .hero-copy { font-size: 15px; }
+        .cta-row { align-items: flex-start; flex-direction: column; gap: 14px; }
+        .phone-stage { position: absolute; right: 0; bottom: 0; width: 54%; height: 340px; opacity: .98; }
+        .hero-phone { width: 173px; height: 350px; right: 27px; }
+        .measure-tag { right: 145px; top: 41px; padding: 8px 9px; font-size: 10px; }
+        .measure-tag b { font-size: 16px; }
+        .signal { bottom: 19px; }
+        .proof-grid { grid-template-columns: repeat(2, 1fr); }
+        .proof-item { min-height: 122px; padding: 22px 15px; }
+        .proof-item:nth-child(2) { border-right: 0; }
+        .proof-item:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+        section { padding: 72px 0; }
+        .workflow, .protocol-layout { display: block; }
+        .workflow-intro { position: static; margin-bottom: 36px; }
+        .workflow-row { grid-template-columns: 50px 1fr; gap: 12px; padding: 23px 0; min-height: 0; }
+        .command { grid-column: 2; justify-self: start; }
+        .gallery-head, .download-band .container { display: block; }
+        .gallery-copy { margin-top: 17px; }
+        .screen-grid { gap: 31px; grid-template-columns: repeat(3, minmax(185px, 1fr)); overflow-x: auto; padding: 0 8px 17px 0; }
+        .screen { min-width: 185px; }
+        .screen-frame img { height: 320px; }
+        .screen:nth-child(2) { transform: none; }
+        .protocol-card { margin-top: 38px; }
+        .download-band .download-button { margin-top: 30px; }
+        .footer-inner { align-items: flex-start; flex-direction: column; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar" aria-label="应用状态">
+      <div class="ticker">
+        <span><b>●</b> BLE WORKBENCH / GOODIX GUS</span><span>实时温度 · 设备信息 · 历史导出</span><span><b>●</b> ANDROID 版本现已可用</span>
+        <span><b>●</b> BLE WORKBENCH / GOODIX GUS</span><span>实时温度 · 设备信息 · 历史导出</span><span><b>●</b> ANDROID 版本现已可用</span>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <a class="brand" href="#top" aria-label="TRCK 首页"><span class="brand-mark"><i data-lucide="activity"></i></span>TRCK</a>
+      <div class="nav-links"><a href="#workflow">工作流</a><a href="#screens">界面</a><a href="#protocol">协议支持</a><a class="nav-download" href="https://www.pgyer.com/trck-android" target="_blank" rel="noopener">下载 Android</a></div>
+    </nav>
+
+    <main id="top">
+      <section class="hero">
+        <div class="container">
+          <div>
+            <div class="eyebrow">GOODIX GUS / BLE WORKBENCH</div>
+            <h1>让温度手环的<br /><em>每一次连接</em> 都清晰可见。</h1>
+            <p class="hero-copy">TRCK 是面向 Goodix GUS 温度手环的移动联调工作台。从设备发现、服务订阅到温度与历史数据，全部流程都在一个界面完成。</p>
+            <div class="cta-row">
+              <a class="download-button" href="https://www.pgyer.com/trck-android" target="_blank" rel="noopener"><i data-lucide="download"></i>下载 Android 版</a>
+              <span class="android-note"><b>ANDROID</b><br />APK · 通过蒲公英分发</span>
+            </div>
+          </div>
+          <div class="phone-stage" aria-hidden="true">
+            <div class="measure-tag">LIVE TEMPERATURE<b>36.7°C</b></div>
+            <div class="hero-phone"><img src="doc/home_page.png" alt="TRCK 首页" /></div>
+          </div>
+          <div class="signal"><span></span>SIGNAL READY / 247 MTU</div>
+        </div>
+      </section>
+
+      <div class="proof">
+        <div class="container proof-grid">
+          <div class="proof-item"><i data-lucide="radio"></i><b>设备扫描</b><span>定位 GUS 服务与目标设备</span></div>
+          <div class="proof-item"><i data-lucide="plug-zap"></i><b>稳定连接</b><span>发现服务并订阅 TX Notify</span></div>
+          <div class="proof-item"><i data-lucide="thermometer"></i><b>实时温度</b><span>有效性、摄氏温度一目了然</span></div>
+          <div class="proof-item"><i data-lucide="file-down"></i><b>历史导出</b><span>读取、校验、保存温度记录</span></div>
+        </div>
+      </div>
+
+      <section id="workflow">
+        <div class="container workflow">
+          <div class="workflow-intro">
+            <div class="section-kicker">FIELD WORKFLOW</div>
+            <h2 class="section-heading">从搜索到留档，<strong>不需要切换工具。</strong></h2>
+            <p>为设备联调设计的顺序化体验。连接状态、协议指令和设备返回都保留在工作现场。</p>
+          </div>
+          <div class="workflow-list">
+            <article class="workflow-row"><div class="step-number">01</div><div><h3>扫描并连接</h3><p>自动识别名称包含 Goodix_GUS 或广播 GUS 服务 UUID 的设备，完成服务发现与 TX 通知订阅。</p></div><span class="command">SCAN → CONNECT</span></article>
+            <article class="workflow-row"><div class="step-number">02</div><div><h3>读取设备状态</h3><p>软件版本、硬件版本、电量、充电状态和设备时间，集中在设备控制台中查询与同步。</p></div><span class="command">0x10 / 0x11 / 0x12</span></article>
+            <article class="workflow-row"><div class="step-number">03</div><div><h3>监测与回溯</h3><p>开启实时温度通知，或读取全部与未上传历史。分包顺序自动校验，记录可导出为 TXT。</p></div><span class="command">0x34 / 0x36</span></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="gallery" id="screens">
+        <div class="container">
+          <div class="gallery-head"><div><div class="section-kicker">IN THE APP</div><h2 class="section-heading">每一段调试过程，<strong>都留在视野内。</strong></h2></div><p class="gallery-copy">沉淀扫描、设备控制和日志信息，让现场联调专注在数据本身。</p></div>
+          <div class="screen-grid">
+            <article class="screen"><div class="screen-label"><b>01 / HOME</b><span>READY</span></div><div class="screen-frame"><img src="doc/home_page.png" alt="TRCK 首页界面" /></div></article>
+            <article class="screen"><div class="screen-label"><b>02 / DISCOVER</b><span>SCAN</span></div><div class="screen-frame"><img src="doc/scan_page.png" alt="TRCK 扫描设备界面" /></div></article>
+            <article class="screen"><div class="screen-label"><b>03 / CONSOLE</b><span>CONNECTED</span></div><div class="screen-frame"><img src="doc/device_info.png" alt="TRCK 设备控制台界面" /></div></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="protocol" id="protocol">
+        <div class="container protocol-layout">
+          <div>
+            <div class="section-kicker">BUILT FOR GUS</div>
+            <h2 class="section-heading">不只是连接。<br /><strong>更懂设备语言。</strong></h2>
+            <p class="protocol-text">围绕 Goodix GUS UART 协议构建，内置常用指令的帧构造、解析与状态处理。TX、RX、SYS 三类日志帮助你快速定位每一处交互。</p>
+            <div class="protocol-footer"><i data-lucide="shield-check"></i>分包首尾与序号自动校验</div>
+          </div>
+          <div class="protocol-card">
+            <header><span>GUS UART / COMMAND MAP</span><span>ONLINE</span></header>
+            <div class="protocol-rows">
+              <div class="protocol-row"><span>设备时间</span><span>0x10</span></div>
+              <div class="protocol-row"><span>软硬件版本</span><span>0x11</span></div>
+              <div class="protocol-row"><span>电量 / 充电状态</span><span>0x12</span></div>
+              <div class="protocol-row"><span>开启实时温度</span><span>0x34</span></div>
+              <div class="protocol-row"><span>温度历史数据</span><span>0x36</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="download-band">
+        <div class="container">
+          <div><div class="section-kicker">READY TO CONNECT</div><h2>带上 TRCK，<br />开始下一次现场联调。</h2></div>
+          <a class="download-button" href="https://www.pgyer.com/trck-android" target="_blank" rel="noopener"><i data-lucide="download"></i>获取 Android 应用</a>
+        </div>
+      </section>
+    </main>
+
+    <footer><div class="container footer-inner"><span class="footer-brand">TRCK / GOODIX GUS BLE WORKBENCH</span><span>Android distribution via <a href="https://www.pgyer.com/trck-android" target="_blank" rel="noopener">Pgyer</a></span></div></footer>
+    <script>lucide.createIcons();</script>
+  </body>
+</html>

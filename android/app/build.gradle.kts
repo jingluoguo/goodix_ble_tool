@@ -5,6 +5,9 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val releaseStoreFile =
+    rootProject.file("upload-keystore.jks")
+
 android {
     namespace = "com.jingluo.goodix_ble_tool"
     compileSdk = flutter.compileSdkVersion
@@ -30,11 +33,33 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = releaseStoreFile
+            storePassword = ""
+            keyAlias = "upload"
+            keyPassword = ""
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
+            ndk {
+                abiFilters.clear()
+                abiFilters.add("arm64-v8a")
+            }
+            
+            isMinifyEnabled = true  // 启用代码压缩
+            isShrinkResources = true  // 启用资源压缩
+            proguardFiles("proguard-rules.pro")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("release")
+            ndk {
+                abiFilters.clear()
+                abiFilters.add("arm64-v8a")
+            }
         }
     }
 }

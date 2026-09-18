@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -5,8 +7,16 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val releaseStoreFile =
-    rootProject.file("upload-keystore.jks")
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use(::load)
+    }
+}
+
+fun signingProperty(name: String): String =
+    keystoreProperties.getProperty(name)
+        ?: error("Missing signing property '$name' in ${keystorePropertiesFile.path}")
 
 android {
     namespace = "com.jingluo.goodix_ble_tool"
@@ -35,10 +45,10 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = releaseStoreFile
-            storePassword = ""
-            keyAlias = "upload"
-            keyPassword = ""
+            storeFile = rootProject.file(signingProperty("storeFile"))
+            storePassword = signingProperty("storePassword")
+            keyAlias = signingProperty("keyAlias")
+            keyPassword = signingProperty("keyPassword")
         }
     }
 
